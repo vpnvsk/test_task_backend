@@ -134,7 +134,11 @@ class DataParser:
                     for user in parser.parse(file_path):
                         try:
                             cur.execute(
-                                "INSERT INTO users(firstname, telephone_number, email, password, role, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+                                """
+                                INSERT INTO
+                                users(firstname, telephone_number, email, password, role, created_at)
+                                VALUES(?, ?, ?, ?, ?, ?)
+                                """,
                                 (user.firstname, user.telephone_number, user.email, user.password, user.role.value,
                                  user.created_at)
                             )
@@ -143,7 +147,11 @@ class DataParser:
                             # Insert Children
                             for child in user.children:
                                 cur.execute(
-                                    "INSERT INTO children (user_id, name, age) VALUES (?, ?, ?)",
+                                    """
+                                    INSERT INTO
+                                    children (user_id, name, age)
+                                    VALUES (?, ?, ?)
+                                    """,
                                     (user_id, child.name, child.age)
                                 )
                         except sqlite3.IntegrityError as e:

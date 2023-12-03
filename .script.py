@@ -19,9 +19,10 @@ from schemas import User
 # for phone_number in phone_numbers:
 #     cleaned_number = clean_and_validate_phone_number(phone_number)
 #     print(cleaned_number)
-dd = {'firstname': 'Theresa', 'telephone_number': '+48013112467', 'email': 'annakane@example.com',
-      'password': 'df#vDs!#$6', 'role': 'admin', 'created_at': '2023-03-22 22:40:41',
-      'children': [{'child': {'name': 'Christopher', 'age': '11'}}, {'child': {'name': 'Suzanne', 'age': '12'}},
-                   {'child': {'name': 'Joshua', 'age': '3'}}]}
-ii = User.model_validate(dd)
-print(ii)
+# dd = {'firstname': 'Theresa', 'telephone_number': '+48013112467', 'email': 'annakane@example.com',
+#       'password': 'df#vDs!#$6', 'role': 'admin', 'created_at': '2023-03-22 22:40:41',
+#       'children': [{'child': {'name': 'Christopher', 'age': '11'}}, {'child': {'name': 'Suzanne', 'age': '12'}},
+#                    {'child': {'name': 'Joshua', 'age': '3'}}]}
+# ii = User.model_validate(dd)
+# print(ii)
+

@@ -13,8 +13,11 @@ class Role(Enum):
 class ChildData(BaseModel):
     name: str
     age: int
+
+
 class Child(BaseModel):
     child: ChildData
+
 
 class User(BaseModel):
     firstname: str
@@ -31,7 +34,7 @@ class User(BaseModel):
         pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9]{1,4}$'
         if not re.match(pattern, v):
             raise ValueError('must contain a space')
-        return v.title()
+        return v.lower()
     @field_validator('telephone_number')
     @classmethod
     def telephone_number(cls, v: str) -> str:
@@ -66,8 +69,14 @@ class User(BaseModel):
         #         children.append(child)
 
         # Convert 'role' to lowercase
-        if 'role' in data:
-            data['role'] = data['role'].lower()
+        # if 'role' in data:
+        #     data['role'] = data['role'].lower()
 
         return cls(**data)
+
+
+class OldestAccount(BaseModel):
+    firstname: str
+    email: str
+    created_at: datetime
 
