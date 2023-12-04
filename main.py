@@ -4,23 +4,7 @@ from handler import Handler
 from parser import DataParser
 
 
-def print_all_accounts():
-    # Implement the functionality to print all accounts
-    print("Printing all accounts...")
 
-
-def main():
-    parser = argparse.ArgumentParser(description="A simple CLI app.")
-
-    # Add commands
-    parser.add_argument("command", choices=["print-all-accounts"], help="Specify the command to execute")
-
-    args = parser.parse_args()
-
-    if args.command == "print-all-accounts":
-        print_all_accounts()
-    else:
-        print("Invalid command. Use --help for usage information.")
 
 
 

@@ -78,10 +78,12 @@ class Handler:
 
     @login_required(Role.admin)
     def group_by_age(self, args, remaining_args):
-        data = cur.execute("""SELECT age, COUNT(*) AS child_count
-FROM children 
-GROUP BY age
-ORDER BY child_count ASC""").fetchall()
+        data = cur.execute("""
+                    SELECT age, COUNT(*) AS child_count
+                    FROM children 
+                    GROUP BY age
+                    ORDER BY child_count ASC
+                    """).fetchall()
         convert_to_string = lambda item: f"age: {item[0]}, count: {item[1]}\n"
 
         # Use the lambda function with map to create a list of formatted strings
@@ -92,14 +94,45 @@ ORDER BY child_count ASC""").fetchall()
         return result_string
 
     @login_required(Role.user)
-    def print_children(self, args):
-        pass
+    def print_children(self, args, remaining_args):
+        login = args.login
+        password = args.password
+        data = cur.execute("""
+        SELECT c.name, c.age FROM children AS c JOIN users AS u ON u.id=c.user_id WHERE u.password=?
+         AND (u.telephone_number=? OR u.email=?) ORDER BY c.name ASC
+        """, (password, login, login)).fetchall()
+        convert_to_string = lambda item: f"{item[0]}, {item[1]}\n"
+
+        # Use the lambda function with map to create a list of formatted strings
+        formatted_strings = list(map(convert_to_string, data))
+        result_string = ''.join(formatted_strings)
+        return result_string
 
     @login_required(Role.user)
-    def find_similar_children_by_age(self, args):
-        pass
+    def find_similar_children_by_age(self, args, remaining_args):
+        login = args.login
+        password = args.password
+        """SELECT u.id, c.age FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE u.password=? AND u.email = ?"""
+        """SELECT DISTINCT u.id FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE (c.age=11 OR c.age=17) and u.id!=699"""
+        """SELECT u.telephone_number, u.firstname, c.name, c.age FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE u.id=701 OR u.id=712 or u.id=723 OR u.id=724 OR u.id=730 OR u.id=733 OR u.id=743 OR u.id=744 OR u.id=745 OR u.id=748 OR u.id=752 OR u.id=767 OR u.id=773 OR u.id=774 OR u.id=777"""
+        data = cur.execute("""SELECT us.firstname, us.telephone_number, ch.name, ch.age FROM users AS us JOIN children
+        AS ch on us.id=ch.user_id WHERE us.id in (SELECT u1.id 
+        FROM users AS u1
+        JOIN children c1 ON u1.id = c1.user_id
+        WHERE c1.age IN (
+            SELECT c.age
+            FROM users u
+            JOIN children c ON u.id = c.user_id
+            WHERE (u.email = ? OR u.telephone_number)AND u.password = ?
+        ) and u1.id!=(
+            SELECT u.id
+            FROM users u
+            WHERE (u.email = ? OR u.telephone_number)AND u.password = ?
+        ))""", (login, login, password, login, login, password)).fetchall()
+        # TODO: parse data
+        return data
 
-    def create_database(self, args):
+    def create_database(self, args, remaining_args):
         pass
 
     def parse_args(self, args=None):
