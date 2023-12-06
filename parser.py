@@ -4,21 +4,23 @@ import json
 import csv
 import re
 import sqlite3
+from abc import ABC, abstractmethod
 from datetime import datetime
 
-from database import creation, creation2, index1, index2
 from schemas import User
 
 
-class Parser:
+class Parser(ABC):
 
     def validate(self, data):
-        # Implement validation logic here
         return User.model_validate(data)
+
+    @abstractmethod
+    def parse(self, file): pass
 
 
 class XMLParser(Parser):
-    def parse(self, xml_file):
+    def parse(self, xml_file) -> list[User]:
         tree = ET.parse(xml_file)
         root = tree.getroot()
 
@@ -46,7 +48,7 @@ class XMLParser(Parser):
 
 
 class JSONParser(Parser):
-    def parse(self, json_file):
+    def parse(self, json_file) -> list[User]:
         user_data = []
 
         with open(json_file, 'r') as f:
@@ -63,16 +65,7 @@ class JSONParser(Parser):
 
 
 class CSVParser(Parser):
-    # def parse(self, csv_file):
-    #     user_data = []
-    #     with open(csv_file, 'r') as f:
-    #         reader = csv.DictReader(f, delimiter=';')
-    #         for row in reader:
-    #             j = self.validate(row)
-    #             user_data.append(j)
-    #
-    #     return user_data
-    def parse(self, csv_file):
+    def parse(self, csv_file) -> list[User]:
         user_data = []
         with open(csv_file, 'r', newline='') as file:
             reader = csv.DictReader(file, delimiter=';')
@@ -126,12 +119,17 @@ class DataParser:
                     parser = self.parsers[extension]
                     all_data.extend(parser.parse(file_path))
                     user = parser.parse(file_path)
-                    # print('\n\n\n\n\n\n\n\n\n\n')
-                    # print(user)
-                    # print('\n\n\n\n\n\n\n\n\n\n')
-                    # print(user[0])
-                    # print('\n\n\n\n\n\n\n\n\n\n')
                     for user in parser.parse(file_path):
+                        try:
+                            cur.execute("""
+                                INSERT INTO roles VALUES(?)
+                                """, (user.role.value,))
+                        except sqlite3.IntegrityError as e:
+                            if "UNIQUE constraint failed" in str(e):
+                                pass
+                            else:
+                                raise
+
                         try:
                             cur.execute(
                                 """
@@ -144,7 +142,6 @@ class DataParser:
                             )
                             user_id = cur.lastrowid
 
-                            # Insert Children
                             for child in user.children:
                                 cur.execute(
                                     """
@@ -155,9 +152,7 @@ class DataParser:
                                     (user_id, child.name, child.age)
                                 )
                         except sqlite3.IntegrityError as e:
-                            # Check if it's a unique constraint violation
                             if "UNIQUE constraint failed" in str(e):
-                                # Handle the conflict based on timestamp
                                 existing_user = cur.execute(
                                     """
                                     SELECT created_at FROM users
@@ -166,8 +161,8 @@ class DataParser:
                                     (user.telephone_number, user.email)
                                 ).fetchone()
 
-                                if existing_user is None or user.created_at > datetime.strptime(existing_user[0], "%Y-%m-%d %H:%M:%S"):
-                                    # No existing user or the new one has a newer timestamp
+                                if existing_user is None or user.created_at > datetime.strptime(existing_user[0],
+                                                                                                "%Y-%m-%d %H:%M:%S"):
                                     continue  # Skip the insertion
                                 else:
                                     cur.execute(
@@ -178,7 +173,6 @@ class DataParser:
                                     )
 
                         except Exception as e:
-                            # Handle other exceptions as needed
                             continue
 
         print('\n\n\n\n\n\n\n\n\n')

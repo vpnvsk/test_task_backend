@@ -1,5 +1,7 @@
 import argparse
+import sqlite3
 
+from database import Database, DatabaseSQLite
 from handler import Handler
 from parser import DataParser
 
@@ -12,7 +14,9 @@ from parser import DataParser
 
 
 if __name__ == "__main__":
-    cli_handler = Handler()
+    con = sqlite3.connect('tutorial.db')
+    db = DatabaseSQLite(con)
+    cli_handler = Handler(db)
 
     # Parse the command-line arguments and execute the corresponding method
     cli_handler.parse_args()

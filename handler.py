@@ -3,58 +3,48 @@ import argparse
 import functools
 import sqlite3
 
-from schemas import OldestAccount, Role
+from database import Database
+from parser import DataParser
+from schemas import Role, GroupByAge, Children, FindSimilarChildrenByAge
 
 con = sqlite3.connect('tutorial.db')
 cur = con.cursor()
 
 
-def authenticate(login, password):
-    # Replace this with your actual database authentication logic
-    cur.execute('SELECT role FROM users WHERE password = ? AND telephone_number = ? OR email = ?',
-                (password, login, login))
-    return cur.fetchone() is not None
-
-
 def login_required(role):
     def log(func):
         @functools.wraps(func)
-        def wrapper(self, args, remaining_args):
+        def wrapper(self, args):
             if not args.login or not args.password:
-                print("Login information is required.")
-                return
+                return "Login information is required."
 
             login = args.login
             password = args.password
-            cur.execute('SELECT role FROM users WHERE password = ? AND (telephone_number = ? OR email = ?)',
-                        (password, login, login))
+            cur.execute("""
+                SELECT role FROM users
+                WHERE password = ? AND (telephone_number = ? OR email = ?)
+              """, (password, login, login))
             is_admin = cur.fetchone()
-            print(f'\n\n\niii\n{is_admin}')
             if is_admin is not None:
 
                 if role == 'admin':
-                    print(is_admin)
                     if is_admin[0] != 'admin':
-                        print('Access denied')
-                        return
+                        return 'Access denied'
             else:
-                print("Invalid login credentials.")
-                return
+                return "Invalid login credentials."
 
-            return func(self, args, remaining_args)
-
+            return func(self, args)
         return wrapper
-
     return log
 
 
 class Handler:
-    def __init__(self):
+    def __init__(self, db: Database):
+        self.db = db
         self.parser = argparse.ArgumentParser(description="Your CLI App Description")
-        self.parser.add_argument('--login', required=True, type=str, help='Login username')
-        self.parser.add_argument('--password', required=True, type=str, help='Login password')
+        self.parser.add_argument('--login',  type=str, help='Login username')
+        self.parser.add_argument('--password',  type=str, help='Login password')
 
-        # Define your command-line arguments here
         self.parser.add_argument('command',
                                  choices=[
                                      'print-oldest-account',
@@ -67,84 +57,67 @@ class Handler:
                                  help='Specify the command')
 
     @login_required(Role.admin)
-    def print_all_accounts(self, args, remaining_ags):
-        return cur.execute("SELECT count(*) FROM users").fetchone()[0]
+    def print_all_accounts(self, args):
+        return self.db.print_all_accounts()
 
     @login_required(Role.admin)
-    def print_oldest_account(self, args, remaining_args):
-        data = cur.execute("SELECT firstname, email, created_at FROM users ORDER BY created_at ASC LIMIT 1;").fetchone()
-        # validated_data = OldestAccount.model_validate_json()
-        return f'name: {data[0]}\nemail_address: {data[1]}\ncreated_at: {data[2]}'
+    def print_oldest_account(self, args) -> str:
+        data = self.db.print_oldest_account()
+        return f"name: {data.firstname}\nemail_address: {data.email}\ncreated_at: {data.created_at}"
 
     @login_required(Role.admin)
-    def group_by_age(self, args, remaining_args):
-        data = cur.execute("""
-                    SELECT age, COUNT(*) AS child_count
-                    FROM children 
-                    GROUP BY age
-                    ORDER BY child_count ASC
-                    """).fetchall()
-        convert_to_string = lambda item: f"age: {item[0]}, count: {item[1]}\n"
+    def group_by_age(self, args) -> str:
+        data = self.db.group_by_age()
 
-        # Use the lambda function with map to create a list of formatted strings
-        formatted_strings = list(map(convert_to_string, data))
+        def convert_to_string(item: GroupByAge) -> str:
+            return f"age: {item.age}, count: {item.child_count}\n"
 
-        # Concatenate the formatted strings into a single string
-        result_string = ''.join(formatted_strings)
-        return result_string
-
-    @login_required(Role.user)
-    def print_children(self, args, remaining_args):
-        login = args.login
-        password = args.password
-        data = cur.execute("""
-        SELECT c.name, c.age FROM children AS c JOIN users AS u ON u.id=c.user_id WHERE u.password=?
-         AND (u.telephone_number=? OR u.email=?) ORDER BY c.name ASC
-        """, (password, login, login)).fetchall()
-        convert_to_string = lambda item: f"{item[0]}, {item[1]}\n"
-
-        # Use the lambda function with map to create a list of formatted strings
         formatted_strings = list(map(convert_to_string, data))
         result_string = ''.join(formatted_strings)
         return result_string
 
     @login_required(Role.user)
-    def find_similar_children_by_age(self, args, remaining_args):
+    def print_children(self, args) -> str:
         login = args.login
         password = args.password
-        """SELECT u.id, c.age FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE u.password=? AND u.email = ?"""
-        """SELECT DISTINCT u.id FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE (c.age=11 OR c.age=17) and u.id!=699"""
-        """SELECT u.telephone_number, u.firstname, c.name, c.age FROM users AS u JOIN children AS c ON u.id=c.user_id WHERE u.id=701 OR u.id=712 or u.id=723 OR u.id=724 OR u.id=730 OR u.id=733 OR u.id=743 OR u.id=744 OR u.id=745 OR u.id=748 OR u.id=752 OR u.id=767 OR u.id=773 OR u.id=774 OR u.id=777"""
-        data = cur.execute("""SELECT us.firstname, us.telephone_number, ch.name, ch.age FROM users AS us JOIN children
-        AS ch on us.id=ch.user_id WHERE us.id in (SELECT u1.id 
-        FROM users AS u1
-        JOIN children c1 ON u1.id = c1.user_id
-        WHERE c1.age IN (
-            SELECT c.age
-            FROM users u
-            JOIN children c ON u.id = c.user_id
-            WHERE (u.email = ? OR u.telephone_number)AND u.password = ?
-        ) and u1.id!=(
-            SELECT u.id
-            FROM users u
-            WHERE (u.email = ? OR u.telephone_number)AND u.password = ?
-        ))""", (login, login, password, login, login, password)).fetchall()
-        # TODO: parse data
-        return data
+        data = self.db.print_children(login, password)
 
-    def create_database(self, args, remaining_args):
-        pass
+        def convert_to_string(item: Children) -> str:
+            return f"{item.name}, {item.age}\n"
+
+        formatted_strings = list(map(convert_to_string, data))
+        result_string = ''.join(formatted_strings)
+        return result_string
+
+    @login_required(Role.user)
+    def find_similar_children_by_age(self, args) -> str:
+        login = args.login
+        password = args.password
+        data = self.db.find_similar_children_by_age(login, password)
+
+        def convert_to_string(item: FindSimilarChildrenByAge) -> str:
+            children_string = ""
+            for children in item.children:
+                children_string = children_string + f"{children.name}, {children.age}; "
+
+            return f"{item.firstname}, {item.telephone_number}: " + children_string[:-2] + "\n"
+
+        formatted_strings = list(map(convert_to_string, data))
+        result_string = ''.join(formatted_strings)
+        return result_string
+
+    def create_database(self, args):
+        self.db.create_database()
+        data_parser = DataParser('data')
+        data_parser.parse_all_files()
+        return "Done"
 
     def parse_args(self, args=None):
         namespace, remaining_args = self.parser.parse_known_args(args)
-
-        # Convert hyphen-separated command to underscore-separated function name
         command_method_name = namespace.command.replace('-', '_')
-
-        # Dynamically call the method based on the command
         command_method = getattr(self, command_method_name, None)
         if callable(command_method):
-            print(command_method(namespace, remaining_args))
+            print(command_method(namespace))
         else:
             print(f"Unknown command: {namespace.command}")
         # parsed_args = self.parser.parse_args(args)
