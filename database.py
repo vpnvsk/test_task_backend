@@ -197,8 +197,8 @@ class DatabaseSQLite(Database):
     def insert_into_database(self, user: User) -> Exception:
         try:
             self.cur.execute("""
-                                       INSERT INTO roles VALUES(?)
-                                       """, (user.role.value,))
+                            INSERT INTO roles VALUES(?)
+                            """, (user.role.value,))
         except sqlite3.IntegrityError as e:
             if "UNIQUE constraint failed" not in str(e):
                 return DatabaseException()
@@ -234,7 +234,7 @@ class DatabaseSQLite(Database):
                     (user.telephone_number, user.email)
                 ).fetchone()
 
-                if existing_user is not None and user.created_at < datetime.strptime(existing_user[0],
+                if existing_user is not None and user.created_at > datetime.strptime(existing_user[0],
                                                                                 "%Y-%m-%d %H:%M:%S"):
                     self.cur.execute(
                         """

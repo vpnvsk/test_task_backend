@@ -1,0 +1,38 @@
+<users>
+    <user>
+        <firstname>Russell</firstname>
+        <telephone_number>+48817730653</telephone_number>
+        <email>jwilliams@example.com</email>
+        <password>4^8(Oj52C+</password>
+        <role>admin</role>
+        <created_at>2023-05-15 21:57:02</created_at>
+        <children>
+            <child>
+                <name>Rebecca</name>
+                <age>11</age>
+            </child>
+            <child>
+                <name>Christie</name>
+                <age>13</age>
+            </child>
+        </children>
+    </user>
+    <user>
+        <firstname>Dawn</firstname>
+        <telephone_number>+48717279856</telephone_number>
+        <email>briancollins@example.net</email>
+        <password>R9AjA5nb$!</password>
+        <role>admin</role>
+        <created_at>2023-11-13 01:28:53</created_at>
+        <children>
+            <child>
+                <name>Andrew</name>
+                <age>3</age>
+            </child>
+            <child>
+                <name>Nicholas</name>
+                <age>13</age>
+            </child>
+        </children>
+    </user>
+</users>
