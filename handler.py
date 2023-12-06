@@ -1,15 +1,11 @@
 import argparse
 import functools
-import sqlite3
 
 from database import Database
 from exceptions import InvalidCredentials, ForbiddenException
 from parser import DataParser
 from schemas import Role, GroupByAge, Children, FindSimilarChildrenByAge
 from utils import check_password
-
-con = sqlite3.connect('users.db')
-cur = con.cursor()
 
 
 class Handler:
@@ -41,11 +37,11 @@ class Handler:
                 login_user = self.db.login(login)
                 if isinstance(login_user, Exception):
                     return InvalidCredentials()
-                if not check_password(password, login_user.password):
-                    return InvalidCredentials()
                 if role == Role.admin:
                     if login_user.role != Role.admin:
                         return ForbiddenException()
+                if not check_password(password, login_user.password):
+                    return InvalidCredentials()
                 return func(self, args)
 
             return wrapper

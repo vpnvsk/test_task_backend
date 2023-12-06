@@ -22,3 +22,18 @@ def create_db():
     yield
     os.remove('test.db')
 
+
+@pytest.fixture
+def mock_db():
+    return db
+
+
+@pytest.fixture
+def mock_data_parser():
+    return data_parser
+
+
+@pytest.fixture
+def handler_instance(mock_db, mock_data_parser):
+    return Handler(db, data_parser)
+

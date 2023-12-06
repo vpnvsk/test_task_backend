@@ -59,4 +59,3 @@ def test_login(create_db):
     result = db.login("briancollins@exampe.net")
     assert isinstance(result, Exception)
 
-

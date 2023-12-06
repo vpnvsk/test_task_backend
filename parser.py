@@ -3,13 +3,10 @@ import xml.etree.ElementTree as ET
 import json
 import csv
 import re
-import sqlite3
 from abc import ABC, abstractmethod
-from datetime import datetime
 
 from database import Database
 from schemas import User
-from utils import hashing_password
 
 
 class Parser(ABC):
@@ -122,4 +119,3 @@ class DataParser:
                         if isinstance(result, Exception):
                             return result
         return "Done"
-
