@@ -1,9 +1,10 @@
-import json
 import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from schemas import Role, OldestAccount, GroupByAge, Children, FindSimilarChildrenByAge
+from exceptions import NotFoundException, InvalidCredentials, DatabaseException
+from schemas import OldestAccount, GroupByAge, Children, FindSimilarChildrenByAge, LoginUser, User
+from utils import hashing_password
 
 
 class Database(ABC):
@@ -21,13 +22,19 @@ class Database(ABC):
     def group_by_age(self) -> list[GroupByAge]: pass
 
     @abstractmethod
-    def print_children(self, login: str, password: str) -> list[Children]: pass
+    def print_children(self, login: str) -> list[Children]: pass
 
     @abstractmethod
-    def find_similar_children_by_age(self, login: str, password: str) -> list[FindSimilarChildrenByAge]: pass
+    def find_similar_children_by_age(self, login: str) -> list[FindSimilarChildrenByAge]: pass
 
     @abstractmethod
     def create_database(self): pass
+
+    @abstractmethod
+    def login(self, login: str) -> LoginUser: pass
+
+    @abstractmethod
+    def insert_into_database(self, user: User): pass
 
 
 class DatabaseSQLite(Database):
@@ -68,11 +75,13 @@ class DatabaseSQLite(Database):
 
         return list_od_data
 
-    def print_children(self, login: str, password: str) -> list[Children]:
+    def print_children(self, login: str) -> list[Children] | NotFoundException:
         data = self.cur.execute("""
-                     SELECT c.name, c.age FROM children AS c JOIN users AS u ON u.id=c.user_id WHERE u.password=?
-                     AND (u.telephone_number=? OR u.email=?) ORDER BY c.name ASC
-                     """, (password, login, login)).fetchall()
+                     SELECT c.name, c.age FROM children AS c JOIN users AS u ON u.id=c.user_id
+                     WHERE  (u.telephone_number=? OR u.email=?) ORDER BY c.name ASC
+                     """, (login, login)).fetchall()
+        if not data:
+            return NotFoundException()
         list_data = []
         for children in data:
             dict_data = {
@@ -83,7 +92,7 @@ class DatabaseSQLite(Database):
             list_data.append(validated_data)
         return list_data
 
-    def find_similar_children_by_age(self, login, password) -> list[FindSimilarChildrenByAge]:
+    def find_similar_children_by_age(self, login: str) -> list[FindSimilarChildrenByAge] | NotFoundException:
         data = self.cur.execute("""
                     SELECT us.firstname, us.telephone_number, ch.name, ch.age FROM users AS us JOIN children
                     AS ch on us.id=ch.user_id WHERE us.id in (SELECT u1.id 
@@ -93,16 +102,17 @@ class DatabaseSQLite(Database):
                         SELECT c.age
                         FROM users u
                         JOIN children c ON u.id = c.user_id
-                        WHERE (u.email = ? OR u.telephone_number = ?)AND u.password = ?
+                        WHERE (u.email = ? OR u.telephone_number = ?)
                     ) and u1.id!=(
                         SELECT u.id
                         FROM users u
-                        WHERE (u.email = ? OR u.telephone_number = ?)AND u.password = ?
+                        WHERE (u.email = ? OR u.telephone_number = ?)
                         ))
                                 ORDER BY us.firstname, ch.name;
 
-                        """, (login, login, password, login, login, password)).fetchall()
-
+                        """, (login, login, login, login)).fetchall()
+        if not data:
+            return NotFoundException()
         list_data = []
         i = 0
         while i < len(data):
@@ -146,7 +156,7 @@ class DatabaseSQLite(Database):
                 firstname TEXT NOT NULL,
                 telephone_number TEXT UNIQUE,
                 email TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL,
+                password BLOB NOT NULL,
                 role TEXT REFERENCES roles(role) ON DELETE CASCADE ON UPDATE CASCADE,
                 created_at DATETIME NOT NULL
             );
@@ -170,4 +180,71 @@ class DatabaseSQLite(Database):
         self.cur.execute(children)
         self.driver.commit()
 
+    def login(self, login: str) -> LoginUser | InvalidCredentials:
+        data = self.cur.execute("""
+                SELECT role, password FROM users
+                WHERE (telephone_number = ? OR email = ?)
+              """, (login, login)).fetchone()
+        if not data:
+            return InvalidCredentials()
+        dict_data = {
+            "role": data[0],
+            "password": data[1]
+        }
+        validated_data = LoginUser.model_validate(dict_data)
+        return validated_data
+
+    def insert_into_database(self, user: User) -> Exception:
+        try:
+            self.cur.execute("""
+                                       INSERT INTO roles VALUES(?)
+                                       """, (user.role.value,))
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" not in str(e):
+                return DatabaseException()
+
+        try:
+            self.cur.execute(
+                """
+                INSERT INTO
+                users(firstname, telephone_number, email, password, role, created_at)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                (user.firstname, user.telephone_number, user.email, hashing_password(user.password),
+                 user.role.value, user.created_at)
+            )
+            user_id = self.cur.lastrowid
+
+            for child in user.children:
+                self.cur.execute(
+                    """
+                    INSERT INTO
+                    children (user_id, name, age)
+                    VALUES (?, ?, ?)
+                    """,
+                    (user_id, child.name, child.age)
+                )
+        except sqlite3.IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e):
+                existing_user = self.cur.execute(
+                    """
+                    SELECT created_at FROM users
+                    WHERE telephone_number=? AND email=?
+                    """,
+                    (user.telephone_number, user.email)
+                ).fetchone()
+
+                if existing_user is not None and user.created_at < datetime.strptime(existing_user[0],
+                                                                                "%Y-%m-%d %H:%M:%S"):
+                    self.cur.execute(
+                        """
+                        UPDATE users SET created_at = ? WHERE  telephone_number=? AND email=?
+                        """,
+                        (user.created_at, user.telephone_number, user.email)
+                    )
+
+        except DatabaseException() as e:
+            return e
+
+        self.driver.commit()
 

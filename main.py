@@ -1,49 +1,15 @@
-import argparse
 import sqlite3
 
-from database import Database, DatabaseSQLite
+from database import DatabaseSQLite
 from handler import Handler
 from parser import DataParser
 
-
-
-
-
-
-
+# TODO: tests coverage
 
 
 if __name__ == "__main__":
-    con = sqlite3.connect('tutorial.db')
+    con = sqlite3.connect('users.db')
     db = DatabaseSQLite(con)
-    cli_handler = Handler(db)
-
-    # Parse the command-line arguments and execute the corresponding method
+    parser = DataParser(db)
+    cli_handler = Handler(db, parser)
     cli_handler.parse_args()
-    # data_path = 'data'
-    # parser = DataParser(data_path)
-    # all_data = parser.parse_all_files()
-    # tel = set()
-    # email = set()
-    # users = []
-    # children = []
-
-    # for i in all_data:
-    #     if i.telephone_number not in tel and i.email not in email:
-    #         users.append(i)
-    #         for chil in i.children:
-    #             children.append(chil)
-    #     tel.add(i.telephone_number)
-    #     email.add(i.email)
-    # print('\n\n\n\n\n\n')
-    # print(f'tel: {len(tel)}')
-    #
-    # print(f'email: {len(email)}')
-    # print(f'users: {len(users)}')
-    # print(f'children: {len(children)}')
-    # print(children)
-    #
-    # print('\n\n\n\n\n\n')
-
-    # print(all_data)
-    # print(len(all_data))

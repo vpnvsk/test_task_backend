@@ -1,50 +1,24 @@
-import click
 import argparse
 import functools
 import sqlite3
 
 from database import Database
+from exceptions import InvalidCredentials, ForbiddenException
 from parser import DataParser
 from schemas import Role, GroupByAge, Children, FindSimilarChildrenByAge
+from utils import check_password
 
-con = sqlite3.connect('tutorial.db')
+con = sqlite3.connect('users.db')
 cur = con.cursor()
 
 
-def login_required(role):
-    def log(func):
-        @functools.wraps(func)
-        def wrapper(self, args):
-            if not args.login or not args.password:
-                return "Login information is required."
-
-            login = args.login
-            password = args.password
-            cur.execute("""
-                SELECT role FROM users
-                WHERE password = ? AND (telephone_number = ? OR email = ?)
-              """, (password, login, login))
-            is_admin = cur.fetchone()
-            if is_admin is not None:
-
-                if role == 'admin':
-                    if is_admin[0] != 'admin':
-                        return 'Access denied'
-            else:
-                return "Invalid login credentials."
-
-            return func(self, args)
-        return wrapper
-    return log
-
-
 class Handler:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, data_parser: DataParser):
+        self.data_parser = data_parser
         self.db = db
-        self.parser = argparse.ArgumentParser(description="Your CLI App Description")
-        self.parser.add_argument('--login',  type=str, help='Login username')
-        self.parser.add_argument('--password',  type=str, help='Login password')
-
+        self.parser = argparse.ArgumentParser(description="CLI application")
+        self.parser.add_argument('--login', type=str, help='Login(email or telephone_number)')
+        self.parser.add_argument('--password', type=str, help='Login password')
         self.parser.add_argument('command',
                                  choices=[
                                      'print-oldest-account',
@@ -56,8 +30,30 @@ class Handler:
                                  ],
                                  help='Specify the command')
 
+    def login_required(role):
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(self, args):
+                if not args.login or not args.password:
+                    return InvalidCredentials()
+                login = args.login
+                password = args.password
+                login_user = self.db.login(login)
+                if isinstance(login_user, Exception):
+                    return InvalidCredentials()
+                if not check_password(password, login_user.password):
+                    return InvalidCredentials()
+                if role == Role.admin:
+                    if login_user.role != Role.admin:
+                        return ForbiddenException()
+                return func(self, args)
+
+            return wrapper
+
+        return decorator
+
     @login_required(Role.admin)
-    def print_all_accounts(self, args):
+    def print_all_accounts(self, args) -> int:
         return self.db.print_all_accounts()
 
     @login_required(Role.admin)
@@ -77,10 +73,12 @@ class Handler:
         return result_string
 
     @login_required(Role.user)
-    def print_children(self, args) -> str:
+    def print_children(self, args) -> Exception | str:
         login = args.login
         password = args.password
-        data = self.db.print_children(login, password)
+        data = self.db.print_children(login)
+        if isinstance(data, Exception):
+            return data
 
         def convert_to_string(item: Children) -> str:
             return f"{item.name}, {item.age}\n"
@@ -90,10 +88,12 @@ class Handler:
         return result_string
 
     @login_required(Role.user)
-    def find_similar_children_by_age(self, args) -> str:
+    def find_similar_children_by_age(self, args) -> Exception | str:
         login = args.login
         password = args.password
-        data = self.db.find_similar_children_by_age(login, password)
+        data = self.db.find_similar_children_by_age(login)
+        if isinstance(data, Exception):
+            return data
 
         def convert_to_string(item: FindSimilarChildrenByAge) -> str:
             children_string = ""
@@ -106,11 +106,9 @@ class Handler:
         result_string = ''.join(formatted_strings)
         return result_string
 
-    def create_database(self, args):
+    def create_database(self, args) -> str:
         self.db.create_database()
-        data_parser = DataParser('data')
-        data_parser.parse_all_files()
-        return "Done"
+        return self.data_parser.parse_all_files()
 
     def parse_args(self, args=None):
         namespace, remaining_args = self.parser.parse_known_args(args)
@@ -120,10 +118,3 @@ class Handler:
             print(command_method(namespace))
         else:
             print(f"Unknown command: {namespace.command}")
-        # parsed_args = self.parser.parse_args(args)
-        # command_method_name = parsed_args.command.replace('-', '_')
-        # command_method = getattr(self, command_method_name, None)
-        # if callable(command_method):
-        #     command_method(parsed_args)
-        # else:
-        #     print(f"Unknown command: {parsed_args.command}")

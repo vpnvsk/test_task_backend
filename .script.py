@@ -2,6 +2,7 @@ import re
 import sqlite3
 
 from schemas import User
+from utils import check_password, hashing_password
 
 # def clean_and_validate_phone_number(phone_number):
 #     # Remove special characters and leading zeros
@@ -96,4 +97,7 @@ dict_data = {
 #         dict_data["telephone_number"] = ""
 #         dict_data["children"] = []
 #         i += 1
-# print(list_data)
+
+h= hashing_password("12345")
+t = check_password("12345", h)
+print(t)

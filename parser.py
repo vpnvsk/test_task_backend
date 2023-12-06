@@ -7,7 +7,9 @@ import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
 
+from database import Database
 from schemas import User
+from utils import hashing_password
 
 
 class Parser(ABC):
@@ -54,7 +56,6 @@ class JSONParser(Parser):
         with open(json_file, 'r') as f:
             data = json.load(f)
         for i in data:
-            # print(i)
             try:
                 j = self.validate(i)
                 user_data.append(j)
@@ -79,7 +80,6 @@ class CSVParser(Parser):
                     "created_at": row['created_at'],
                     "children": self.parse_children(row.get('children', ''))
                 }
-                print(user)
                 try:
                     user_data.append(self.validate(user))
                 except:
@@ -97,7 +97,8 @@ class CSVParser(Parser):
 
 
 class DataParser:
-    def __init__(self, data_path):
+    def __init__(self, db: Database, data_path="."):
+        self.db = db
         self.data_path = data_path
         self.parsers = {
             '.xml': XMLParser(),
@@ -105,11 +106,9 @@ class DataParser:
             '.csv': CSVParser()
         }
 
-    def parse_all_files(self):
+    def parse_all_files(self) -> str | Exception:
 
         all_data = []
-        con = sqlite3.connect('tutorial.db')
-        cur = con.cursor()
         for root, dirs, files in os.walk(self.data_path):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -118,67 +117,9 @@ class DataParser:
                 if extension in self.parsers:
                     parser = self.parsers[extension]
                     all_data.extend(parser.parse(file_path))
-                    user = parser.parse(file_path)
                     for user in parser.parse(file_path):
-                        try:
-                            cur.execute("""
-                                INSERT INTO roles VALUES(?)
-                                """, (user.role.value,))
-                        except sqlite3.IntegrityError as e:
-                            if "UNIQUE constraint failed" in str(e):
-                                pass
-                            else:
-                                raise
+                        result = self.db.insert_into_database(user)
+                        if isinstance(result, Exception):
+                            return result
+        return "Done"
 
-                        try:
-                            cur.execute(
-                                """
-                                INSERT INTO
-                                users(firstname, telephone_number, email, password, role, created_at)
-                                VALUES(?, ?, ?, ?, ?, ?)
-                                """,
-                                (user.firstname, user.telephone_number, user.email, user.password, user.role.value,
-                                 user.created_at)
-                            )
-                            user_id = cur.lastrowid
-
-                            for child in user.children:
-                                cur.execute(
-                                    """
-                                    INSERT INTO
-                                    children (user_id, name, age)
-                                    VALUES (?, ?, ?)
-                                    """,
-                                    (user_id, child.name, child.age)
-                                )
-                        except sqlite3.IntegrityError as e:
-                            if "UNIQUE constraint failed" in str(e):
-                                existing_user = cur.execute(
-                                    """
-                                    SELECT created_at FROM users
-                                    WHERE telephone_number=? AND email=?
-                                    """,
-                                    (user.telephone_number, user.email)
-                                ).fetchone()
-
-                                if existing_user is None or user.created_at > datetime.strptime(existing_user[0],
-                                                                                                "%Y-%m-%d %H:%M:%S"):
-                                    continue  # Skip the insertion
-                                else:
-                                    cur.execute(
-                                        """
-                                        UPDATE users SET created_at = ? WHERE  telephone_number=? AND email=?
-                                        """,
-                                        (user.created_at, user.telephone_number, user.email)
-                                    )
-
-                        except Exception as e:
-                            continue
-
-        print('\n\n\n\n\n\n\n\n\n')
-        print(all_data)
-        print('\n\n\n\n\n\n\n\n\n')
-
-        con.commit()
-
-        return all_data

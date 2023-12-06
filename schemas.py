@@ -40,12 +40,17 @@ class User(BaseModel):
     @classmethod
     def telephone_number(cls, v: str) -> str:
         if v == '':
-            raise IndexError
+            raise ValueError("telephone number is empty")
         cleaned_number = re.sub(r'\D', '', v)
         if len(cleaned_number) == 9 and cleaned_number.isdigit():
             return cleaned_number
         else:
             return cleaned_number[-9:]
+
+
+class LoginUser(BaseModel):
+    role: Role
+    password: bytes
 
 
 class OldestAccount(BaseModel):
